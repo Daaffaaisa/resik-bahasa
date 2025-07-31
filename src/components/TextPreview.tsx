@@ -138,10 +138,26 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
       )}
 
       {/* Text Content */}
-      <Card className="p-6">
-        <div className="prose max-w-none">
-          <div className="whitespace-pre-wrap leading-relaxed text-base font-medium">
-            {highlightErrors(content)}
+      <Card className="p-0">
+        {/* Document-like container with Word margins */}
+        <div className="bg-white min-h-[600px] shadow-sm">
+          <div 
+            className="prose max-w-none px-10 pt-12 pb-10"
+            style={{
+              paddingTop: '3cm',
+              paddingLeft: '2.5cm', 
+              paddingRight: '2.5cm',
+              paddingBottom: '2.5cm',
+              minHeight: '29.7cm', // A4 height
+              width: '21cm', // A4 width
+              margin: '0 auto',
+              backgroundColor: 'white',
+              boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+            }}
+          >
+            <div className="whitespace-pre-wrap leading-relaxed text-base font-medium text-black">
+              {highlightErrors(content)}
+            </div>
           </div>
         </div>
       </Card>
