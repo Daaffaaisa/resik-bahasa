@@ -6,7 +6,7 @@ import { FileText, Download, AlertTriangle, CheckCircle, XCircle } from 'lucide-
 import { cn } from '@/lib/utils';
 
 interface Error {
-  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization';
+  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization' | 'format';
   text: string;
   suggestion: string;
   start: number;
@@ -32,6 +32,8 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
         return 'bg-destructive text-destructive-foreground';
       case 'capitalization':
         return 'bg-primary text-primary-foreground';
+      case 'format':
+        return 'bg-orange-500 text-white';
       default:
         return 'bg-muted text-muted-foreground';
     }
@@ -43,6 +45,8 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
         return <XCircle className="w-4 h-4" />;
       case 'spelling':
         return <AlertTriangle className="w-4 h-4" />;
+      case 'format':
+        return <FileText className="w-4 h-4" />;
       default:
         return <AlertTriangle className="w-4 h-4" />;
     }
@@ -130,6 +134,7 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
                 {type === 'spelling' && 'Ejaan'}
                 {type === 'punctuation' && 'Tanda Baca'}
                 {type === 'capitalization' && 'Kapitalisasi'}
+                {type === 'format' && 'Format Dokumen'}
                 : {count}
               </Badge>
             ))}
@@ -175,6 +180,7 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
                 {selectedError.type === 'spelling' && 'Kesalahan Ejaan'}
                 {selectedError.type === 'punctuation' && 'Kesalahan Tanda Baca'}
                 {selectedError.type === 'capitalization' && 'Kesalahan Kapitalisasi'}
+                {selectedError.type === 'format' && 'Kesalahan Format Dokumen'}
               </h4>
               <p className="text-sm text-muted-foreground mb-2">
                 Ditemukan: <span className="font-mono bg-muted px-1 rounded">"{selectedError.text}"</span>

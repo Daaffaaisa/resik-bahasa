@@ -7,21 +7,22 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, CheckCircle, Users, Zap } from 'lucide-react';
 import heroImage from '@/assets/hero-bg.jpg';
-
 const Index = () => {
   const [fileContent, setFileContent] = useState<string>('');
   const [filename, setFilename] = useState<string>('');
   const [errors, setErrors] = useState<GrammarError[]>([]);
+  const [margins, setMargins] = useState<{ top: number; bottom: number; left: number; right: number } | undefined>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const handleFileContent = async (content: string, name: string) => {
+  const handleFileContent = async (content: string, name: string, fileMargins?: { top: number; bottom: number; left: number; right: number }) => {
     setFileContent(content);
     setFilename(name);
+    setMargins(fileMargins);
     setIsAnalyzing(true);
     
     // Simulate processing time
     setTimeout(() => {
-      const foundErrors = checkGrammar(content);
+      const foundErrors = checkGrammar(content, fileMargins);
       setErrors(foundErrors);
       setIsAnalyzing(false);
     }, 1500);
@@ -30,6 +31,7 @@ const Index = () => {
   const resetAnalysis = () => {
     setFileContent('');
     setFilename('');
+    setMargins(undefined);
     setErrors([]);
     setIsAnalyzing(false);
   };

@@ -1,10 +1,17 @@
 // Basic grammar and language checking utilities for Indonesian
 export interface GrammarError {
-  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization';
+  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization' | 'format';
   text: string;
   suggestion: string;
   start: number;
   end: number;
+}
+
+interface DocumentMargins {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
 }
 
 // Load KBBI database
@@ -78,7 +85,7 @@ const properNouns = [
   'allah', 'tuhan', 'islam', 'kristen', 'hindu', 'buddha',
 ];
 
-export const checkGrammar = (text: string): GrammarError[] => {
+const checkText = (text: string): GrammarError[] => {
   const errors: GrammarError[] = [];
   const words = text.split(/(\s+|[.,!?;:])/);
   let position = 0;
@@ -236,4 +243,63 @@ const checkSentenceCapitalization = (text: string): GrammarError[] => {
   });
 
   return errors;
+};
+
+// Check document margins
+export const checkMargins = (margins?: DocumentMargins): GrammarError[] => {
+  const errors: GrammarError[] = [];
+  
+  if (!margins) return errors;
+  
+  // Standard margins: top 3cm, others 2.5cm
+  const standardMargins = { top: 3.0, bottom: 2.5, left: 2.5, right: 2.5 };
+  
+  if (Math.abs(margins.top - standardMargins.top) > 0.1) {
+    errors.push({
+      type: 'format',
+      text: 'Margin Atas',
+      suggestion: `Margin atas harus 3.0 cm (saat ini ${margins.top} cm). Atur margin atas ke 3.0 cm.`,
+      start: 0,
+      end: 0,
+    });
+  }
+  
+  if (Math.abs(margins.bottom - standardMargins.bottom) > 0.1) {
+    errors.push({
+      type: 'format',
+      text: 'Margin Bawah',
+      suggestion: `Margin bawah harus 2.5 cm (saat ini ${margins.bottom} cm). Atur margin bawah ke 2.5 cm.`,
+      start: 0,
+      end: 0,
+    });
+  }
+  
+  if (Math.abs(margins.left - standardMargins.left) > 0.1) {
+    errors.push({
+      type: 'format',
+      text: 'Margin Kiri',
+      suggestion: `Margin kiri harus 2.5 cm (saat ini ${margins.left} cm). Atur margin kiri ke 2.5 cm.`,
+      start: 0,
+      end: 0,
+    });
+  }
+  
+  if (Math.abs(margins.right - standardMargins.right) > 0.1) {
+    errors.push({
+      type: 'format',
+      text: 'Margin Kanan',
+      suggestion: `Margin kanan harus 2.5 cm (saat ini ${margins.right} cm). Atur margin kanan ke 2.5 cm.`,
+      start: 0,
+      end: 0,
+    });
+  }
+  
+  return errors;
+};
+
+export const checkGrammar = (text: string, margins?: DocumentMargins): GrammarError[] => {
+  const textErrors = checkText(text);
+  const marginErrors = checkMargins(margins);
+  
+  return [...textErrors, ...marginErrors];
 };
