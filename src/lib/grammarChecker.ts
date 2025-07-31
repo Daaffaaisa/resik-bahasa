@@ -7,6 +7,29 @@ export interface GrammarError {
   end: number;
 }
 
+// Load KBBI database
+let kbbiWords: Set<string> = new Set();
+
+// Load KBBI words from file
+const loadKBBIWords = async (): Promise<Set<string>> => {
+  try {
+    const response = await fetch('/kbbi_baku.txt');
+    const text = await response.text();
+    const words = text.split('\n')
+      .map(line => line.trim().toLowerCase())
+      .filter(word => word && !word.startsWith('(') && !word.includes('-') && word.length > 1);
+    return new Set(words);
+  } catch (error) {
+    console.error('Error loading KBBI database:', error);
+    return new Set();
+  }
+};
+
+// Initialize KBBI words
+loadKBBIWords().then(words => {
+  kbbiWords = words;
+});
+
 // Common informal words to formal words mapping
 const informalToFormal: Record<string, string> = {
   'gak': 'tidak',
@@ -79,6 +102,22 @@ export const checkGrammar = (text: string): GrammarError[] => {
         start: position,
         end: position + word.length,
       });
+    }
+
+    // Check if word exists in KBBI (for non-common words only)
+    if (cleanWord.length > 2 && !informalToFormal[cleanWord] && !properNouns.includes(cleanWord)) {
+      if (kbbiWords.size > 0 && !kbbiWords.has(cleanWord)) {
+        // Only flag as error if it's not a proper noun, number, or punctuation
+        if (!/^[\d\-.,!?;:()]+$/.test(originalWord) && !/^[A-Z]/.test(originalWord)) {
+          errors.push({
+            type: 'spelling',
+            text: originalWord,
+            suggestion: `Kata "${originalWord}" tidak ditemukan dalam KBBI. Periksa ejaan kata ini.`,
+            start: position,
+            end: position + word.length,
+          });
+        }
+      }
     }
 
     // Check common spelling mistakes
