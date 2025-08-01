@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,18 @@ interface TextPreviewProps {
 
 export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => {
   const [selectedError, setSelectedError] = useState<Error | null>(null);
+  const errorDetailsRef = useRef<HTMLDivElement>(null);
+
+  const handleErrorClick = (error: Error) => {
+    setSelectedError(error);
+    // Scroll to error details section with smooth animation
+    setTimeout(() => {
+      errorDetailsRef.current?.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }, 100);
+  };
 
   const getErrorColor = (type: Error['type']) => {
     switch (type) {
@@ -73,7 +85,7 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
             "cursor-pointer rounded px-1 transition-all duration-200 hover:opacity-80",
             getErrorColor(error.type)
           )}
-          onClick={() => setSelectedError(error)}
+          onClick={() => handleErrorClick(error)}
           title={`${error.type}: ${error.suggestion}`}
         >
           {error.text}
@@ -169,7 +181,10 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
 
       {/* Error Details */}
       {selectedError && (
-        <Card className="p-4 border-l-4 border-l-primary">
+        <Card 
+          ref={errorDetailsRef}
+          className="p-4 border-l-4 border-l-primary animate-in slide-in-from-bottom-4 duration-300"
+        >
           <div className="flex items-start gap-3">
             <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", getErrorColor(selectedError.type))}>
               {getErrorIcon(selectedError.type)}
