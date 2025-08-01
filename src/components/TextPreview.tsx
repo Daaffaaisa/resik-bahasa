@@ -6,7 +6,7 @@ import { FileText, Download, AlertTriangle, CheckCircle, XCircle } from 'lucide-
 import { cn } from '@/lib/utils';
 
 interface Error {
-  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization' | 'format';
+  type: 'grammar' | 'spelling' | 'misspelling' | 'informal' | 'punctuation' | 'capitalization' | 'format';
   text: string;
   suggestion: string;
   start: number;
@@ -40,6 +40,10 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
         return 'bg-error text-error-foreground';
       case 'spelling':
         return 'bg-warning text-warning-foreground';
+      case 'misspelling':
+        return 'bg-red-500 text-white';
+      case 'informal':
+        return 'bg-blue-500 text-white';
       case 'punctuation':
         return 'bg-destructive text-destructive-foreground';
       case 'capitalization':
@@ -56,6 +60,10 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
       case 'grammar':
         return <XCircle className="w-4 h-4" />;
       case 'spelling':
+        return <AlertTriangle className="w-4 h-4" />;
+      case 'misspelling':
+        return <XCircle className="w-4 h-4" />;
+      case 'informal':
         return <AlertTriangle className="w-4 h-4" />;
       case 'format':
         return <FileText className="w-4 h-4" />;
@@ -143,7 +151,9 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
               <Badge key={type} variant="secondary" className="gap-1">
                 {getErrorIcon(type as Error['type'])}
                 {type === 'grammar' && 'Tata Bahasa'}
-                {type === 'spelling' && 'Ejaan'}
+                {type === 'spelling' && 'Kata Tidak Dikenal'}
+                {type === 'misspelling' && 'Salah Ketik'}
+                {type === 'informal' && 'Kata Tidak Baku'}
                 {type === 'punctuation' && 'Tanda Baca'}
                 {type === 'capitalization' && 'Kapitalisasi'}
                 {type === 'format' && 'Format Dokumen'}
@@ -192,7 +202,9 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
             <div className="flex-1">
               <h4 className="font-semibold mb-1">
                 {selectedError.type === 'grammar' && 'Kesalahan Tata Bahasa'}
-                {selectedError.type === 'spelling' && 'Kesalahan Ejaan'}
+                {selectedError.type === 'spelling' && 'Kata Tidak Dikenal'}
+                {selectedError.type === 'misspelling' && 'Kesalahan Pengetikan'}
+                {selectedError.type === 'informal' && 'Kata Tidak Baku'}
                 {selectedError.type === 'punctuation' && 'Kesalahan Tanda Baca'}
                 {selectedError.type === 'capitalization' && 'Kesalahan Kapitalisasi'}
                 {selectedError.type === 'format' && 'Kesalahan Format Dokumen'}

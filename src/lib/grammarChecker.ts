@@ -1,6 +1,6 @@
 // Basic grammar and language checking utilities for Indonesian
 export interface GrammarError {
-  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization' | 'format';
+  type: 'grammar' | 'spelling' | 'misspelling' | 'informal' | 'punctuation' | 'capitalization' | 'format';
   text: string;
   suggestion: string;
   start: number;
@@ -57,7 +57,7 @@ const informalToFormal: Record<string, string> = {
   'ngomong': 'berbicara',
 };
 
-// Common spelling mistakes
+// Common spelling mistakes (misspelling/typos)
 const commonMistakes: Record<string, string> = {
   'di makan': 'dimakan',
   'di baca': 'dibaca',
@@ -74,6 +74,42 @@ const commonMistakes: Record<string, string> = {
   'aktifitas': 'aktivitas',
   'effektif': 'efektif',
   'standart': 'standar',
+};
+
+// Common typos/misspelling (salah ketik)
+const commonTypos: Record<string, string> = {
+  'sayah': 'saya',
+  'sayaa': 'saya',
+  'kitaa': 'kita',
+  'kitaaa': 'kita',
+  'kamii': 'kami',
+  'kamiiii': 'kami',
+  'kalinn': 'kalian',
+  'merekaaa': 'mereka',
+  'adaa': 'ada',
+  'adaaa': 'ada',
+  'tidaak': 'tidak',
+  'tidaaak': 'tidak',
+  'sudahh': 'sudah',
+  'sudahhhh': 'sudah',
+  'bisaa': 'bisa',
+  'bisaaa': 'bisa',
+  'mauu': 'mau',
+  'mauuu': 'mau',
+  'baikk': 'baik',
+  'baikkkk': 'baik',
+  'benarr': 'benar',
+  'benarrrr': 'benar',
+  'salahh': 'salah',
+  'salahhhh': 'salah',
+  'makann': 'makan',
+  'makannn': 'makan',
+  'minumm': 'minum',
+  'minummm': 'minum',
+  'iyyah': 'iya',
+  'iyyaaa': 'iya',
+  'ogahh': 'ogah',
+  'ogahhhh': 'ogah',
 };
 
 // Proper nouns that should be capitalized
@@ -100,19 +136,28 @@ const checkText = (text: string): GrammarError[] => {
       return;
     }
 
-    // Check informal words
-    if (informalToFormal[cleanWord]) {
+    // Check typos/misspelling first (highest priority)
+    if (commonTypos[cleanWord]) {
       errors.push({
-        type: 'spelling',
+        type: 'misspelling',
+        text: originalWord,
+        suggestion: `Kemungkinan salah ketik. Gunakan "${commonTypos[cleanWord]}" instead of "${originalWord}"`,
+        start: position,
+        end: position + word.length,
+      });
+    }
+    // Check informal words (kata tidak baku)
+    else if (informalToFormal[cleanWord]) {
+      errors.push({
+        type: 'informal',
         text: originalWord,
         suggestion: `Gunakan kata baku "${informalToFormal[cleanWord]}" instead of "${originalWord}"`,
         start: position,
         end: position + word.length,
       });
     }
-
-    // Check if word exists in KBBI (for non-common words only)
-    if (cleanWord.length > 2 && !informalToFormal[cleanWord] && !properNouns.includes(cleanWord)) {
+    // Check if word exists in KBBI (for remaining words)
+    else if (cleanWord.length > 2 && !properNouns.includes(cleanWord)) {
       if (kbbiWords.size > 0 && !kbbiWords.has(cleanWord)) {
         // Only flag as error if it's not a proper noun, number, or punctuation
         if (!/^[\d\-.,!?;:()]+$/.test(originalWord) && !/^[A-Z]/.test(originalWord)) {
@@ -127,13 +172,13 @@ const checkText = (text: string): GrammarError[] => {
       }
     }
 
-    // Check common spelling mistakes
+    // Check common spelling mistakes (separate check)
     const lowerText = text.toLowerCase();
     Object.entries(commonMistakes).forEach(([mistake, correct]) => {
       const mistakeIndex = lowerText.indexOf(mistake.toLowerCase(), position);
       if (mistakeIndex !== -1 && mistakeIndex < position + word.length) {
         errors.push({
-          type: 'spelling',
+          type: 'misspelling',
           text: mistake,
           suggestion: `Perbaiki menjadi "${correct}"`,
           start: mistakeIndex,
