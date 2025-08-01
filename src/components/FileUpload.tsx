@@ -23,22 +23,8 @@ export const FileUpload = ({ onFileContent }: FileUploadProps) => {
         const result = await mammoth.extractRawText({ arrayBuffer });
         
         // Simulate margin detection (in real implementation, you'd parse document.xml)
-        // For demo purposes, we'll randomly assign margins to test the feature
-        let margins = { top: 2.54, bottom: 2.54, left: 2.54, right: 2.54 }; // Default Word margins in cm
-        
-        // Simulate different margin scenarios for testing
-        const scenario = Math.random();
-        if (scenario > 0.8) {
-          margins = { top: 2.0, bottom: 2.0, left: 2.0, right: 2.0 }; // All margins wrong
-        } else if (scenario > 0.6) {
-          margins = { top: 2.0, bottom: 2.5, left: 2.5, right: 2.5 }; // Only top wrong
-        } else if (scenario > 0.4) {
-          margins = { top: 3.0, bottom: 2.0, left: 2.5, right: 2.5 }; // Only bottom wrong
-        } else if (scenario > 0.2) {
-          margins = { top: 3.0, bottom: 2.5, left: 2.0, right: 2.5 }; // Only left wrong
-        } else if (scenario > 0.1) {
-          margins = { top: 3.0, bottom: 2.5, left: 2.5, right: 2.0 }; // Only right wrong
-        }
+        // For demo purposes, we'll use fixed wrong margins to test all scenarios
+        let margins = { top: 2.0, bottom: 2.0, left: 2.0, right: 2.0 }; // All margins wrong for testing
         
         onFileContent(result.value, file.name, margins);
       } else if (file.name.endsWith('.txt')) {
