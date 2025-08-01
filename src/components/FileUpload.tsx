@@ -27,8 +27,17 @@ export const FileUpload = ({ onFileContent }: FileUploadProps) => {
         let margins = { top: 2.54, bottom: 2.54, left: 2.54, right: 2.54 }; // Default Word margins in cm
         
         // Simulate different margin scenarios for testing
-        if (Math.random() > 0.5) {
-          margins = { top: 2.0, bottom: 2.5, left: 2.5, right: 2.5 }; // Wrong margins for testing
+        const scenario = Math.random();
+        if (scenario > 0.8) {
+          margins = { top: 2.0, bottom: 2.0, left: 2.0, right: 2.0 }; // All margins wrong
+        } else if (scenario > 0.6) {
+          margins = { top: 2.0, bottom: 2.5, left: 2.5, right: 2.5 }; // Only top wrong
+        } else if (scenario > 0.4) {
+          margins = { top: 3.0, bottom: 2.0, left: 2.5, right: 2.5 }; // Only bottom wrong
+        } else if (scenario > 0.2) {
+          margins = { top: 3.0, bottom: 2.5, left: 2.0, right: 2.5 }; // Only left wrong
+        } else if (scenario > 0.1) {
+          margins = { top: 3.0, bottom: 2.5, left: 2.5, right: 2.0 }; // Only right wrong
         }
         
         onFileContent(result.value, file.name, margins);
