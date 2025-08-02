@@ -1,6 +1,6 @@
 // Basic grammar and language checking utilities for Indonesian
 export interface GrammarError {
-  type: 'grammar' | 'spelling' | 'misspelling' | 'informal' | 'punctuation' | 'capitalization' | 'format';
+  type: 'grammar' | 'spelling' | 'punctuation' | 'capitalization' | 'format';
   text: string;
   suggestion: string;
   start: number;
@@ -57,7 +57,7 @@ const informalToFormal: Record<string, string> = {
   'ngomong': 'berbicara',
 };
 
-// Common spelling mistakes (misspelling/typos)
+// Common spelling mistakes
 const commonMistakes: Record<string, string> = {
   'di makan': 'dimakan',
   'di baca': 'dibaca',
@@ -85,63 +85,6 @@ const properNouns = [
   'allah', 'tuhan', 'islam', 'kristen', 'hindu', 'buddha',
 ];
 
-// Calculate Levenshtein distance between two strings
-const levenshteinDistance = (str1: string, str2: string): number => {
-  const matrix = [];
-  
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-  
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1,     // insertion
-          matrix[i - 1][j] + 1      // deletion
-        );
-      }
-    }
-  }
-  
-  return matrix[str2.length][str1.length];
-};
-
-// Find closest match in KBBI using fuzzy matching
-const findClosestMatch = (word: string): string | null => {
-  if (kbbiWords.size === 0) return null;
-  
-  const wordLower = word.toLowerCase();
-  let bestMatch = '';
-  let bestDistance = Infinity;
-  
-  // Only check words with similar length to avoid performance issues
-  for (const kbbiWord of kbbiWords) {
-    // Skip if length difference is too large
-    if (Math.abs(kbbiWord.length - wordLower.length) > 2) continue;
-    
-    const distance = levenshteinDistance(wordLower, kbbiWord);
-    
-    // Consider it a potential typo if distance is 1 or 2 for words > 3 chars
-    // or distance is 1 for shorter words
-    const maxDistance = wordLower.length > 3 ? 2 : 1;
-    
-    if (distance <= maxDistance && distance < bestDistance) {
-      bestDistance = distance;
-      bestMatch = kbbiWord;
-    }
-  }
-  
-  return bestDistance <= (wordLower.length > 3 ? 2 : 1) ? bestMatch : null;
-};
-
 const checkText = (text: string): GrammarError[] => {
   const errors: GrammarError[] = [];
   const words = text.split(/(\s+|[.,!?;:])/);
@@ -157,35 +100,22 @@ const checkText = (text: string): GrammarError[] => {
       return;
     }
 
-    // Skip if it's a number, punctuation, or proper noun starting with capital
-    if (!/^[\d\-.,!?;:()]+$/.test(originalWord) && cleanWord.length > 1) {
-      
-      // Check informal words first (kata tidak baku)
-      if (informalToFormal[cleanWord]) {
-        errors.push({
-          type: 'informal',
-          text: originalWord,
-          suggestion: `Gunakan kata baku "${informalToFormal[cleanWord]}" instead of "${originalWord}"`,
-          start: position,
-          end: position + word.length,
-        });
-      }
-      // Check if word exists in KBBI
-      else if (kbbiWords.size > 0 && !kbbiWords.has(cleanWord) && !properNouns.includes(cleanWord)) {
-        // Try to find closest match using fuzzy matching
-        const closestMatch = findClosestMatch(cleanWord);
-        
-        if (closestMatch) {
-          // It's likely a typo/misspelling
-          errors.push({
-            type: 'misspelling',
-            text: originalWord,
-            suggestion: `Kemungkinan salah ketik. Maksud Anda "${closestMatch}"?`,
-            start: position,
-            end: position + word.length,
-          });
-        } else {
-          // Word not found and no close match
+    // Check informal words
+    if (informalToFormal[cleanWord]) {
+      errors.push({
+        type: 'spelling',
+        text: originalWord,
+        suggestion: `Gunakan kata baku "${informalToFormal[cleanWord]}" instead of "${originalWord}"`,
+        start: position,
+        end: position + word.length,
+      });
+    }
+
+    // Check if word exists in KBBI (for non-common words only)
+    if (cleanWord.length > 2 && !informalToFormal[cleanWord] && !properNouns.includes(cleanWord)) {
+      if (kbbiWords.size > 0 && !kbbiWords.has(cleanWord)) {
+        // Only flag as error if it's not a proper noun, number, or punctuation
+        if (!/^[\d\-.,!?;:()]+$/.test(originalWord) && !/^[A-Z]/.test(originalWord)) {
           errors.push({
             type: 'spelling',
             text: originalWord,
@@ -197,13 +127,13 @@ const checkText = (text: string): GrammarError[] => {
       }
     }
 
-    // Check common spelling mistakes (separate check for specific patterns)
+    // Check common spelling mistakes
     const lowerText = text.toLowerCase();
     Object.entries(commonMistakes).forEach(([mistake, correct]) => {
       const mistakeIndex = lowerText.indexOf(mistake.toLowerCase(), position);
       if (mistakeIndex !== -1 && mistakeIndex < position + word.length) {
         errors.push({
-          type: 'misspelling',
+          type: 'spelling',
           text: mistake,
           suggestion: `Perbaiki menjadi "${correct}"`,
           start: mistakeIndex,
