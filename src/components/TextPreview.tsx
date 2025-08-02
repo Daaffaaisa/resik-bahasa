@@ -72,6 +72,142 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     }
   };
 
+  const downloadResults = () => {
+    const htmlContent = generateDownloadHTML();
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename.replace(/\.[^/.]+$/, '')}_hasil_analisis.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const generateDownloadHTML = () => {
+    const highlightedText = generateHighlightedHTML(content);
+    const errorDetails = generateErrorDetailsHTML();
+    
+    return `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hasil Analisis - ${filename}</title>
+    <style>
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f5f5f5; 
+        }
+        .document { 
+            max-width: 21cm; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 3cm 2.5cm; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            min-height: 29.7cm;
+        }
+        .content { 
+            line-height: 1.6; 
+            font-size: 12pt; 
+            white-space: pre-wrap; 
+        }
+        .error-grammar { background-color: #fef2f2; color: #991b1b; padding: 2px 4px; border-radius: 3px; }
+        .error-spelling { background-color: #fef3c7; color: #92400e; padding: 2px 4px; border-radius: 3px; }
+        .error-misspelling { background-color: #fee2e2; color: #dc2626; padding: 2px 4px; border-radius: 3px; }
+        .error-informal { background-color: #dbeafe; color: #1d4ed8; padding: 2px 4px; border-radius: 3px; }
+        .error-punctuation { background-color: #fecaca; color: #b91c1c; padding: 2px 4px; border-radius: 3px; }
+        .error-capitalization { background-color: #e0e7ff; color: #3730a3; padding: 2px 4px; border-radius: 3px; }
+        .error-format { background-color: #fed7aa; color: #c2410c; padding: 2px 4px; border-radius: 3px; }
+        .page-break { page-break-before: always; }
+        .error-details { margin-top: 2cm; }
+        .error-item { 
+            margin-bottom: 15px; 
+            padding: 10px; 
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        .error-item-grammar { background-color: #fef2f2; border-left-color: #991b1b; }
+        .error-item-spelling { background-color: #fef3c7; border-left-color: #92400e; }
+        .error-item-misspelling { background-color: #fee2e2; border-left-color: #dc2626; }
+        .error-item-informal { background-color: #dbeafe; border-left-color: #1d4ed8; }
+        .error-item-punctuation { background-color: #fecaca; border-left-color: #b91c1c; }
+        .error-item-capitalization { background-color: #e0e7ff; border-left-color: #3730a3; }
+        .error-item-format { background-color: #fed7aa; border-left-color: #c2410c; }
+        .error-title { font-weight: bold; margin-bottom: 5px; }
+        .error-text { font-family: monospace; background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px; }
+        h2 { color: #333; border-bottom: 2px solid #333; padding-bottom: 5px; }
+        @media print {
+            body { margin: 0; padding: 0; background: white; }
+            .document { box-shadow: none; margin: 0; padding: 2.5cm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="document">
+        <div class="content">${highlightedText}</div>
+        ${errors.length > 0 ? `
+        <div class="page-break"></div>
+        <div class="error-details">
+            <h2>Detail Kesalahan</h2>
+            ${errorDetails}
+        </div>
+        ` : ''}
+    </div>
+</body>
+</html>`;
+  };
+
+  const generateHighlightedHTML = (text: string) => {
+    if (errors.length === 0) return text.replace(/\n/g, '<br>');
+
+    const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
+    let result = '';
+    let lastIndex = 0;
+
+    sortedErrors.forEach((error) => {
+      // Add text before error
+      if (error.start > lastIndex) {
+        result += text.slice(lastIndex, error.start).replace(/\n/g, '<br>');
+      }
+
+      // Add highlighted error text
+      result += `<span class="error-${error.type}">${error.text}</span>`;
+      lastIndex = error.end;
+    });
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      result += text.slice(lastIndex).replace(/\n/g, '<br>');
+    }
+
+    return result;
+  };
+
+  const generateErrorDetailsHTML = () => {
+    const errorTypeNames = {
+      grammar: 'Kesalahan Tata Bahasa',
+      spelling: 'Kata Tidak Dikenal',
+      misspelling: 'Kesalahan Pengetikan',
+      informal: 'Kata Tidak Baku',
+      punctuation: 'Kesalahan Tanda Baca',
+      capitalization: 'Kesalahan Kapitalisasi',
+      format: 'Kesalahan Format Dokumen'
+    };
+
+    return errors.map((error, index) => `
+      <div class="error-item error-item-${error.type}">
+        <div class="error-title">${index + 1}. ${errorTypeNames[error.type as keyof typeof errorTypeNames]}</div>
+        <div>Ditemukan: <span class="error-text">"${error.text}"</span></div>
+        <div><strong>Saran:</strong> ${error.suggestion}</div>
+      </div>
+    `).join('');
+  };
+
   const highlightErrors = (text: string) => {
     if (errors.length === 0) return text;
 
@@ -132,7 +268,7 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={downloadResults}>
             <Download className="w-4 h-4 mr-2" />
             Unduh Hasil
           </Button>
