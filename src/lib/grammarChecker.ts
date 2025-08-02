@@ -55,6 +55,32 @@ const informalToFormal: Record<string, string> = {
   'doang': 'saja',
   'ketemuan': 'bertemu',
   'ngomong': 'berbicara',
+  'sayah': 'saya',
+};
+
+// Common suffixes that make valid Indonesian words
+const validSuffixes = ['ku', 'mu', 'nya', 'lah', 'kah', 'tah', 'an', 'kan', 'i', 'in'];
+
+// Check if a word might be a valid Indonesian word with suffix
+const isValidWithSuffix = (word: string): boolean => {
+  if (kbbiWords.size === 0) return false;
+  
+  const wordLower = word.toLowerCase();
+  
+  // Check if the word itself is in KBBI
+  if (kbbiWords.has(wordLower)) return true;
+  
+  // Check if removing common suffixes results in a valid word
+  for (const suffix of validSuffixes) {
+    if (wordLower.endsWith(suffix) && wordLower.length > suffix.length + 2) {
+      const rootWord = wordLower.slice(0, -suffix.length);
+      if (kbbiWords.has(rootWord)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
 };
 
 // Common spelling mistakes (misspelling/typos)
@@ -114,13 +140,12 @@ const levenshteinDistance = (str1: string, str2: string): number => {
   return matrix[str2.length][str1.length];
 };
 
-// Find closest match in KBBI using fuzzy matching
-const findClosestMatch = (word: string): string | null => {
-  if (kbbiWords.size === 0) return null;
+// Find closest match in KBBI using fuzzy matching (more conservative)
+const findClosestMatch = (word: string): string[] => {
+  if (kbbiWords.size === 0) return [];
   
   const wordLower = word.toLowerCase();
-  let bestMatch = '';
-  let bestDistance = Infinity;
+  const matches: { word: string; distance: number }[] = [];
   
   // Only check words with similar length to avoid performance issues
   for (const kbbiWord of kbbiWords) {
@@ -129,17 +154,26 @@ const findClosestMatch = (word: string): string | null => {
     
     const distance = levenshteinDistance(wordLower, kbbiWord);
     
-    // Consider it a potential typo if distance is 1 or 2 for words > 3 chars
-    // or distance is 1 for shorter words
-    const maxDistance = wordLower.length > 3 ? 2 : 1;
+    // More conservative: only distance 1 for short words, max 2 for longer words
+    // and only if the words share some common characters
+    const maxDistance = wordLower.length <= 4 ? 1 : 2;
     
-    if (distance <= maxDistance && distance < bestDistance) {
-      bestDistance = distance;
-      bestMatch = kbbiWord;
+    if (distance <= maxDistance && distance > 0) {
+      // Additional check: ensure some character similarity
+      const commonChars = [...wordLower].filter(char => kbbiWord.includes(char)).length;
+      const similarityRatio = commonChars / Math.max(wordLower.length, kbbiWord.length);
+      
+      if (similarityRatio >= 0.5) { // At least 50% character similarity
+        matches.push({ word: kbbiWord, distance });
+      }
     }
   }
   
-  return bestDistance <= (wordLower.length > 3 ? 2 : 1) ? bestMatch : null;
+  // Return top 2 closest matches, sorted by distance
+  return matches
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 2)
+    .map(match => match.word);
 };
 
 const checkText = (text: string): GrammarError[] => {
@@ -160,39 +194,45 @@ const checkText = (text: string): GrammarError[] => {
     // Skip if it's a number, punctuation, or proper noun starting with capital
     if (!/^[\d\-.,!?;:()]+$/.test(originalWord) && cleanWord.length > 1) {
       
-      // Check informal words first (kata tidak baku)
+      // 1. Check informal words first (kata tidak baku) - highest priority
       if (informalToFormal[cleanWord]) {
         errors.push({
           type: 'informal',
           text: originalWord,
-          suggestion: `Gunakan kata baku "${informalToFormal[cleanWord]}" instead of "${originalWord}"`,
+          suggestion: `Gunakan kata baku "${informalToFormal[cleanWord]}" sebagai gantinya`,
           start: position,
           end: position + word.length,
         });
       }
-      // Check if word exists in KBBI
-      else if (kbbiWords.size > 0 && !kbbiWords.has(cleanWord) && !properNouns.includes(cleanWord)) {
-        // Try to find closest match using fuzzy matching
-        const closestMatch = findClosestMatch(cleanWord);
+      // 2. Check if word is valid (in KBBI or valid with suffix)
+      else if (kbbiWords.size > 0 && !isValidWithSuffix(cleanWord) && !properNouns.includes(cleanWord)) {
+        // 3. Try to find closest matches using fuzzy matching
+        const closestMatches = findClosestMatch(cleanWord);
         
-        if (closestMatch) {
+        if (closestMatches.length > 0) {
           // It's likely a typo/misspelling
+          const suggestion = closestMatches.length === 1 
+            ? `Kemungkinan salah ketik. Maksud Anda "${closestMatches[0]}"?`
+            : `Kemungkinan salah ketik. Maksud Anda "${closestMatches[0]}" atau "${closestMatches[1]}"?`;
+            
           errors.push({
             type: 'misspelling',
             text: originalWord,
-            suggestion: `Kemungkinan salah ketik. Maksud Anda "${closestMatch}"?`,
+            suggestion: suggestion,
             start: position,
             end: position + word.length,
           });
         } else {
-          // Word not found and no close match
-          errors.push({
-            type: 'spelling',
-            text: originalWord,
-            suggestion: `Kata "${originalWord}" tidak ditemukan dalam KBBI. Periksa ejaan kata ini.`,
-            start: position,
-            end: position + word.length,
-          });
+          // Word not found and no close match - only flag if it's not a proper noun or technical term
+          if (!/^[A-Z]/.test(originalWord) && !/\d/.test(originalWord)) {
+            errors.push({
+              type: 'spelling',
+              text: originalWord,
+              suggestion: `Kata "${originalWord}" tidak ditemukan dalam KBBI. Periksa ejaan kata ini.`,
+              start: position,
+              end: position + word.length,
+            });
+          }
         }
       }
     }
