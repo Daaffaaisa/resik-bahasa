@@ -2,8 +2,11 @@ import { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { FileText, Download, AlertTriangle, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import html2pdf from 'html2pdf.js';
 
 interface Error {
   type: 'grammar' | 'spelling' | 'misspelling' | 'informal' | 'punctuation' | 'capitalization' | 'format';
@@ -72,94 +75,176 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     }
   };
 
-  const downloadResults = () => {
-    const htmlContent = generateDownloadHTML();
-    const blob = new Blob([htmlContent], { type: 'text/html' });
+  const downloadDOCX = async () => {
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          // Header
+          new Paragraph({
+            text: `Hasil Analisis - ${filename}`,
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({ text: "" }),
+          
+          // Content with highlighted errors
+          ...generateDocxContent(),
+          
+          // Error details if any
+          ...(errors.length > 0 ? [
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              text: "DETAIL KESALAHAN",
+              heading: HeadingLevel.HEADING_2,
+            }),
+            new Paragraph({ text: "" }),
+            ...generateDocxErrorDetails()
+          ] : [])
+        ]
+      }]
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${filename.replace(/\.[^/.]+$/, '')}_hasil_analisis.html`;
+    a.download = `${filename.replace(/\.[^/.]+$/, '')}_hasil_analisis.docx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const generateDownloadHTML = () => {
+  const downloadPDF = () => {
+    const htmlContent = generatePDFHTML();
+    const options = {
+      margin: [1, 1, 1, 1],
+      filename: `${filename.replace(/\.[^/.]+$/, '')}_hasil_analisis.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(options).from(htmlContent).save();
+  };
+
+  const generateDocxContent = () => {
+    if (errors.length === 0) {
+      return content.split('\n').map(line => 
+        new Paragraph({ text: line || " " })
+      );
+    }
+
+    const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
+    const paragraphs = [];
+    let lastIndex = 0;
+
+    sortedErrors.forEach((error) => {
+      // Add text before error
+      if (error.start > lastIndex) {
+        const beforeText = content.slice(lastIndex, error.start);
+        beforeText.split('\n').forEach(line => {
+          paragraphs.push(new Paragraph({ text: line || " " }));
+        });
+      }
+
+      // Add error text with highlighting (comment format in DOCX)
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: error.text,
+            highlight: getDocxErrorColor(error.type)
+          }),
+          new TextRun({
+            text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
+            italics: true,
+            size: 18
+          })
+        ]
+      }));
+
+      lastIndex = error.end;
+    });
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+      const remainingText = content.slice(lastIndex);
+      remainingText.split('\n').forEach(line => {
+        paragraphs.push(new Paragraph({ text: line || " " }));
+      });
+    }
+
+    return paragraphs;
+  };
+
+  const generateDocxErrorDetails = () => {
+    return errors.map((error, index) => [
+      new Paragraph({
+        text: `${index + 1}. ${getErrorTypeName(error.type)}`,
+        heading: HeadingLevel.HEADING_3,
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Ditemukan: ", bold: true }),
+          new TextRun({ text: `"${error.text}"`, italics: true })
+        ]
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Saran: ", bold: true }),
+          new TextRun({ text: error.suggestion })
+        ]
+      }),
+      new Paragraph({ text: "" })
+    ]).flat();
+  };
+
+  const getDocxErrorColor = (type: Error['type']) => {
+    switch (type) {
+      case 'grammar': return 'red';
+      case 'spelling': return 'yellow';
+      case 'misspelling': return 'red';
+      case 'informal': return 'cyan';
+      case 'punctuation': return 'red';
+      case 'capitalization': return 'blue';
+      case 'format': return 'yellow';
+      default: return 'lightGray';
+    }
+  };
+
+  const getErrorTypeName = (type: Error['type']) => {
+    const names = {
+      grammar: 'Kesalahan Tata Bahasa',
+      spelling: 'Kata Tidak Dikenal',
+      misspelling: 'Kesalahan Pengetikan',
+      informal: 'Kata Tidak Baku',
+      punctuation: 'Kesalahan Tanda Baca',
+      capitalization: 'Kesalahan Kapitalisasi',
+      format: 'Kesalahan Format Dokumen'
+    };
+    return names[type] || type;
+  };
+
+  const generatePDFHTML = () => {
     const highlightedText = generateHighlightedHTML(content);
     const errorDetails = generateErrorDetailsHTML();
     
     return `
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hasil Analisis - ${filename}</title>
-    <style>
-        body { 
-            font-family: 'Times New Roman', serif; 
-            margin: 0; 
-            padding: 20px; 
-            background-color: #f5f5f5; 
-        }
-        .document { 
-            max-width: 21cm; 
-            margin: 0 auto; 
-            background: white; 
-            padding: 3cm 2.5cm; 
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            min-height: 29.7cm;
-        }
-        .content { 
-            line-height: 1.6; 
-            font-size: 12pt; 
-            white-space: pre-wrap; 
-        }
-        .error-grammar { background-color: #fef2f2; color: #991b1b; padding: 2px 4px; border-radius: 3px; }
-        .error-spelling { background-color: #fef3c7; color: #92400e; padding: 2px 4px; border-radius: 3px; }
-        .error-misspelling { background-color: #fee2e2; color: #dc2626; padding: 2px 4px; border-radius: 3px; }
-        .error-informal { background-color: #dbeafe; color: #1d4ed8; padding: 2px 4px; border-radius: 3px; }
-        .error-punctuation { background-color: #fecaca; color: #b91c1c; padding: 2px 4px; border-radius: 3px; }
-        .error-capitalization { background-color: #e0e7ff; color: #3730a3; padding: 2px 4px; border-radius: 3px; }
-        .error-format { background-color: #fed7aa; color: #c2410c; padding: 2px 4px; border-radius: 3px; }
-        .page-break { page-break-before: always; }
-        .error-details { margin-top: 2cm; }
-        .error-item { 
-            margin-bottom: 15px; 
-            padding: 10px; 
-            border-radius: 5px;
-            border-left: 4px solid;
-        }
-        .error-item-grammar { background-color: #fef2f2; border-left-color: #991b1b; }
-        .error-item-spelling { background-color: #fef3c7; border-left-color: #92400e; }
-        .error-item-misspelling { background-color: #fee2e2; border-left-color: #dc2626; }
-        .error-item-informal { background-color: #dbeafe; border-left-color: #1d4ed8; }
-        .error-item-punctuation { background-color: #fecaca; border-left-color: #b91c1c; }
-        .error-item-capitalization { background-color: #e0e7ff; border-left-color: #3730a3; }
-        .error-item-format { background-color: #fed7aa; border-left-color: #c2410c; }
-        .error-title { font-weight: bold; margin-bottom: 5px; }
-        .error-text { font-family: monospace; background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px; }
-        h2 { color: #333; border-bottom: 2px solid #333; padding-bottom: 5px; }
-        @media print {
-            body { margin: 0; padding: 0; background: white; }
-            .document { box-shadow: none; margin: 0; padding: 2.5cm; }
-        }
-    </style>
-</head>
-<body>
-    <div class="document">
-        <div class="content">${highlightedText}</div>
-        ${errors.length > 0 ? `
-        <div class="page-break"></div>
-        <div class="error-details">
-            <h2>Detail Kesalahan</h2>
-            ${errorDetails}
-        </div>
-        ` : ''}
-    </div>
-</body>
-</html>`;
+<div style="font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.6;">
+  <h1 style="text-align: center; margin-bottom: 30px;">Hasil Analisis - ${filename}</h1>
+  
+  <div style="white-space: pre-wrap; margin-bottom: 40px;">${highlightedText}</div>
+  
+  ${errors.length > 0 ? `
+  <div style="page-break-before: always;">
+    <h2 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 5px;">Detail Kesalahan</h2>
+    ${errorDetails}
+  </div>
+  ` : ''}
+</div>`;
   };
 
   const generateHighlightedHTML = (text: string) => {
@@ -170,17 +255,13 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     let lastIndex = 0;
 
     sortedErrors.forEach((error) => {
-      // Add text before error
       if (error.start > lastIndex) {
         result += text.slice(lastIndex, error.start).replace(/\n/g, '<br>');
       }
-
-      // Add highlighted error text
-      result += `<span class="error-${error.type}">${error.text}</span>`;
+      result += `<span style="background-color: ${getPDFErrorColor(error.type)}; padding: 2px 4px; border-radius: 3px;">${error.text}</span>`;
       lastIndex = error.end;
     });
 
-    // Add remaining text
     if (lastIndex < text.length) {
       result += text.slice(lastIndex).replace(/\n/g, '<br>');
     }
@@ -188,24 +269,40 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     return result;
   };
 
-  const generateErrorDetailsHTML = () => {
-    const errorTypeNames = {
-      grammar: 'Kesalahan Tata Bahasa',
-      spelling: 'Kata Tidak Dikenal',
-      misspelling: 'Kesalahan Pengetikan',
-      informal: 'Kata Tidak Baku',
-      punctuation: 'Kesalahan Tanda Baca',
-      capitalization: 'Kesalahan Kapitalisasi',
-      format: 'Kesalahan Format Dokumen'
-    };
+  const getPDFErrorColor = (type: Error['type']) => {
+    switch (type) {
+      case 'grammar': return '#fef2f2';
+      case 'spelling': return '#fef3c7';
+      case 'misspelling': return '#fee2e2';
+      case 'informal': return '#dbeafe';
+      case 'punctuation': return '#fecaca';
+      case 'capitalization': return '#e0e7ff';
+      case 'format': return '#fed7aa';
+      default: return '#f3f4f6';
+    }
+  };
 
+  const generateErrorDetailsHTML = () => {
     return errors.map((error, index) => `
-      <div class="error-item error-item-${error.type}">
-        <div class="error-title">${index + 1}. ${errorTypeNames[error.type as keyof typeof errorTypeNames]}</div>
-        <div>Ditemukan: <span class="error-text">"${error.text}"</span></div>
+      <div style="margin-bottom: 15px; padding: 10px; border-radius: 5px; border-left: 4px solid ${getBorderColor(error.type)}; background-color: ${getPDFErrorColor(error.type)};">
+        <div style="font-weight: bold; margin-bottom: 5px;">${index + 1}. ${getErrorTypeName(error.type)}</div>
+        <div>Ditemukan: <span style="font-family: monospace; background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">"${error.text}"</span></div>
         <div><strong>Saran:</strong> ${error.suggestion}</div>
       </div>
     `).join('');
+  };
+
+  const getBorderColor = (type: Error['type']) => {
+    switch (type) {
+      case 'grammar': return '#991b1b';
+      case 'spelling': return '#92400e';
+      case 'misspelling': return '#dc2626';
+      case 'informal': return '#1d4ed8';
+      case 'punctuation': return '#b91c1c';
+      case 'capitalization': return '#3730a3';
+      case 'format': return '#c2410c';
+      default: return '#6b7280';
+    }
   };
 
   const highlightErrors = (text: string) => {
@@ -268,10 +365,25 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={downloadResults}>
-            <Download className="w-4 h-4 mr-2" />
-            Unduh Hasil
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Unduh Hasil
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={downloadDOCX}>
+                <FileText className="w-4 h-4 mr-2" />
+                Download sebagai DOCX
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={downloadPDF}>
+                <FileText className="w-4 h-4 mr-2" />
+                Download sebagai PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </Card>
 
