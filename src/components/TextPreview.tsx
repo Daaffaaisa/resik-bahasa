@@ -106,8 +106,8 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
       }]
     });
 
-    const buffer = await Packer.toBuffer(doc);
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    // Use toBlob instead of toBuffer for browser compatibility
+    const blob = await Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -233,14 +233,14 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     const errorDetails = generateErrorDetailsHTML();
     
     return `
-<div style="font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.6;">
-  <h1 style="text-align: center; margin-bottom: 30px;">Hasil Analisis - ${filename}</h1>
+<div style="font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.8; color: #000;">
+  <h1 style="text-align: center; margin-bottom: 30px; font-size: 24px; font-weight: bold;">Hasil Analisis - ${filename}</h1>
   
-  <div style="white-space: pre-wrap; margin-bottom: 40px;">${highlightedText}</div>
+  <div style="white-space: pre-wrap; margin-bottom: 40px; font-size: 14px; text-align: justify;">${highlightedText}</div>
   
   ${errors.length > 0 ? `
   <div style="page-break-before: always;">
-    <h2 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 5px;">Detail Kesalahan</h2>
+    <h2 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 5px; margin-top: 30px; margin-bottom: 20px; font-size: 18px;">Detail Kesalahan</h2>
     ${errorDetails}
   </div>
   ` : ''}
@@ -258,7 +258,7 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
       if (error.start > lastIndex) {
         result += text.slice(lastIndex, error.start).replace(/\n/g, '<br>');
       }
-      result += `<span style="background-color: ${getPDFErrorColor(error.type)}; padding: 2px 4px; border-radius: 3px;">${error.text}</span>`;
+      result += `<span style="background-color: ${getPDFErrorColor(error.type)}; padding: 1px 3px; border-radius: 2px; border: 1px solid ${getBorderColor(error.type)}; font-weight: 500;">${error.text}</span>`;
       lastIndex = error.end;
     });
 
