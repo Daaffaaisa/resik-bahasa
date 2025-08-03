@@ -139,66 +139,119 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     }
 
     const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
-    const paragraphs = [];
+    const result = [];
     let lastIndex = 0;
 
+    // Build text with inline highlighting, similar to PDF
+    let processedText = '';
+    
     sortedErrors.forEach((error) => {
       // Add text before error
       if (error.start > lastIndex) {
-        const beforeText = content.slice(lastIndex, error.start);
-        beforeText.split('\n').forEach(line => {
-          paragraphs.push(new Paragraph({ text: line || " " }));
-        });
+        processedText += content.slice(lastIndex, error.start);
       }
-
-      // Add error text with highlighting (comment format in DOCX)
-      paragraphs.push(new Paragraph({
-        children: [
-          new TextRun({
-            text: error.text,
-            highlight: getDocxErrorColor(error.type)
-          }),
-          new TextRun({
-            text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
-            italics: true,
-            size: 18
-          })
-        ]
-      }));
-
+      
+      // Add highlighted error text (inline, like PDF)
+      processedText += error.text;
       lastIndex = error.end;
     });
 
     // Add remaining text
     if (lastIndex < content.length) {
-      const remainingText = content.slice(lastIndex);
-      remainingText.split('\n').forEach(line => {
-        paragraphs.push(new Paragraph({ text: line || " " }));
-      });
+      processedText += content.slice(lastIndex);
     }
 
-    return paragraphs;
+    // Convert to paragraphs with proper highlighting
+    let textIndex = 0;
+    const lines = processedText.split('\n');
+    
+    lines.forEach(line => {
+      if (line.length === 0) {
+        result.push(new Paragraph({ text: " " }));
+        textIndex += 1; // account for newline
+        return;
+      }
+
+      const lineStart = textIndex;
+      const lineEnd = textIndex + line.length;
+      const lineErrors = sortedErrors.filter(error => 
+        (error.start >= lineStart && error.start < lineEnd) ||
+        (error.end > lineStart && error.end <= lineEnd) ||
+        (error.start < lineStart && error.end > lineEnd)
+      );
+
+      if (lineErrors.length === 0) {
+        result.push(new Paragraph({ text: line }));
+      } else {
+        const children = [];
+        let lineLastIndex = 0;
+
+        lineErrors.forEach(error => {
+          const errorStartInLine = Math.max(0, error.start - lineStart);
+          const errorEndInLine = Math.min(line.length, error.end - lineStart);
+
+          // Add text before error
+          if (errorStartInLine > lineLastIndex) {
+            children.push(new TextRun({
+              text: line.slice(lineLastIndex, errorStartInLine)
+            }));
+          }
+
+          // Add highlighted error text
+          children.push(new TextRun({
+            text: line.slice(errorStartInLine, errorEndInLine),
+            highlight: getDocxErrorColor(error.type)
+          }));
+
+          lineLastIndex = errorEndInLine;
+        });
+
+        // Add remaining text in line
+        if (lineLastIndex < line.length) {
+          children.push(new TextRun({
+            text: line.slice(lineLastIndex)
+          }));
+        }
+
+        result.push(new Paragraph({ children }));
+      }
+
+      textIndex += line.length + 1; // +1 for newline
+    });
+
+    return result;
   };
 
   const generateDocxErrorDetails = () => {
     return errors.map((error, index) => [
       new Paragraph({
-        text: `${index + 1}. ${getErrorTypeName(error.type)}`,
-        heading: HeadingLevel.HEADING_3,
+        children: [
+          new TextRun({
+            text: `${index + 1}. ${getErrorTypeName(error.type)}`,
+            bold: true,
+            size: 24
+          })
+        ],
+        spacing: { before: 200, after: 100 }
       }),
       new Paragraph({
         children: [
           new TextRun({ text: "Ditemukan: ", bold: true }),
-          new TextRun({ text: `"${error.text}"`, italics: true })
-        ]
+          new TextRun({ 
+            text: `"${error.text}"`, 
+            italics: true,
+            highlight: getDocxErrorColor(error.type)
+          })
+        ],
+        spacing: { after: 100 }
       }),
       new Paragraph({
         children: [
           new TextRun({ text: "Saran: ", bold: true }),
           new TextRun({ text: error.suggestion })
-        ]
-      }),
-      new Paragraph({ text: "" })
+        ],
+        spacing: { after: 200 }
+      })
     ]).flat();
   };
 
