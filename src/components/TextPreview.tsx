@@ -146,25 +146,44 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
       // Add text before error
       if (error.start > lastIndex) {
         const beforeText = content.slice(lastIndex, error.start);
-        beforeText.split('\n').forEach(line => {
-          paragraphs.push(new Paragraph({ text: line || " " }));
+        const lines = beforeText.split('\n');
+        lines.forEach((line, index) => {
+          if (index === lines.length - 1 && line && error.start < content.length) {
+            // Last line before error, add as inline text
+            paragraphs.push(new Paragraph({
+              children: [
+                new TextRun({ text: line }),
+                new TextRun({
+                  text: error.text,
+                  highlight: getDocxErrorColor(error.type)
+                }),
+                new TextRun({
+                  text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
+                  italics: true,
+                  size: 18
+                })
+              ]
+            }));
+          } else {
+            paragraphs.push(new Paragraph({ text: line || " " }));
+          }
         });
+      } else {
+        // Error at start or consecutive errors
+        paragraphs.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: error.text,
+              highlight: getDocxErrorColor(error.type)
+            }),
+            new TextRun({
+              text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
+              italics: true,
+              size: 18
+            })
+          ]
+        }));
       }
-
-      // Add error text with highlighting (comment format in DOCX)
-      paragraphs.push(new Paragraph({
-        children: [
-          new TextRun({
-            text: error.text,
-            highlight: getDocxErrorColor(error.type)
-          }),
-          new TextRun({
-            text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
-            italics: true,
-            size: 18
-          })
-        ]
-      }));
 
       lastIndex = error.end;
     });
@@ -183,13 +202,23 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
   const generateDocxErrorDetails = () => {
     return errors.map((error, index) => [
       new Paragraph({
-        text: `${index + 1}. ${getErrorTypeName(error.type)}`,
-        heading: HeadingLevel.HEADING_3,
+        children: [
+          new TextRun({
+            text: `${index + 1}. ${getErrorTypeName(error.type)}`,
+            bold: true,
+            size: 22
+          })
+        ],
+        spacing: { before: 200, after: 100 }
       }),
       new Paragraph({
         children: [
           new TextRun({ text: "Ditemukan: ", bold: true }),
-          new TextRun({ text: `"${error.text}"`, italics: true })
+          new TextRun({ 
+            text: `"${error.text}"`, 
+            italics: true,
+            highlight: getDocxErrorColor(error.type)
+          })
         ]
       }),
       new Paragraph({
@@ -259,6 +288,7 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
         result += text.slice(lastIndex, error.start).replace(/\n/g, '<br>');
       }
       result += `<span style="background-color: ${getPDFErrorColor(error.type)}; padding: 1px 3px; border-radius: 2px; border: 1px solid ${getBorderColor(error.type)}; font-weight: 500;">${error.text}</span>`;
+      result += `<em style="font-size: 12px; color: #666; font-style: italic;"> [${getErrorTypeName(error.type)}: ${error.suggestion}]</em>`;
       lastIndex = error.end;
     });
 
