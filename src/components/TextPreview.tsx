@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { FileText, Download, AlertTriangle, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
-import html2pdf from 'html2pdf.js';
+
 
 interface Error {
   type: 'grammar' | 'spelling' | 'misspelling' | 'informal' | 'punctuation' | 'capitalization' | 'format';
@@ -118,19 +118,6 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     URL.revokeObjectURL(url);
   };
 
-  const downloadPDF = () => {
-    const htmlContent = generatePDFHTML();
-    const options = {
-      margin: [1, 1, 1, 1],
-      filename: `${filename.replace(/\.[^/.]+$/, '')}_hasil_analisis.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-    };
-
-    html2pdf().set(options).from(htmlContent).save();
-  };
-
   const generateDocxContent = () => {
     if (errors.length === 0) {
       return content.split('\n').map(line => 
@@ -209,23 +196,58 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
             size: 22
           })
         ],
-        spacing: { before: 200, after: 100 }
+        shading: {
+          type: 'solid',
+          color: getDocxErrorBackgroundColor(error.type),
+          fill: getDocxErrorBackgroundColor(error.type)
+        },
+        spacing: { before: 200, after: 100 },
+        border: {
+          left: {
+            style: 'single',
+            size: 8,
+            color: getDocxErrorBorderColor(error.type)
+          }
+        }
       }),
       new Paragraph({
         children: [
           new TextRun({ text: "Ditemukan: ", bold: true }),
           new TextRun({ 
             text: `"${error.text}"`, 
-            italics: true,
-            highlight: getDocxErrorColor(error.type)
+            italics: true
           })
-        ]
+        ],
+        shading: {
+          type: 'solid',
+          color: getDocxErrorBackgroundColor(error.type),
+          fill: getDocxErrorBackgroundColor(error.type)
+        },
+        border: {
+          left: {
+            style: 'single',
+            size: 8,
+            color: getDocxErrorBorderColor(error.type)
+          }
+        }
       }),
       new Paragraph({
         children: [
           new TextRun({ text: "Saran: ", bold: true }),
           new TextRun({ text: error.suggestion })
-        ]
+        ],
+        shading: {
+          type: 'solid',
+          color: getDocxErrorBackgroundColor(error.type),
+          fill: getDocxErrorBackgroundColor(error.type)
+        },
+        border: {
+          left: {
+            style: 'single',
+            size: 8,
+            color: getDocxErrorBorderColor(error.type)
+          }
+        }
       }),
       new Paragraph({ text: "" })
     ]).flat();
@@ -244,6 +266,32 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     }
   };
 
+  const getDocxErrorBackgroundColor = (type: Error['type']) => {
+    switch (type) {
+      case 'grammar': return 'FFEBEE'; // Light red
+      case 'spelling': return 'FFF3E0'; // Light orange  
+      case 'misspelling': return 'FFEBEE'; // Light red
+      case 'informal': return 'E3F2FD'; // Light blue
+      case 'punctuation': return 'FFEBEE'; // Light red
+      case 'capitalization': return 'E8EAF6'; // Light indigo
+      case 'format': return 'FFF3E0'; // Light orange
+      default: return 'F5F5F5'; // Light gray
+    }
+  };
+
+  const getDocxErrorBorderColor = (type: Error['type']) => {
+    switch (type) {
+      case 'grammar': return 'D32F2F'; // Dark red
+      case 'spelling': return 'F57C00'; // Dark orange
+      case 'misspelling': return 'D32F2F'; // Dark red
+      case 'informal': return '1976D2'; // Dark blue
+      case 'punctuation': return 'D32F2F'; // Dark red
+      case 'capitalization': return '303F9F'; // Dark indigo
+      case 'format': return 'F57C00'; // Dark orange
+      default: return '757575'; // Dark gray
+    }
+  };
+
   const getErrorTypeName = (type: Error['type']) => {
     const names = {
       grammar: 'Kesalahan Tata Bahasa',
@@ -257,83 +305,6 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     return names[type] || type;
   };
 
-  const generatePDFHTML = () => {
-    const highlightedText = generateHighlightedHTML(content);
-    const errorDetails = generateErrorDetailsHTML();
-    
-    return `
-<div style="font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.8; color: #000;">
-  <h1 style="text-align: center; margin-bottom: 30px; font-size: 24px; font-weight: bold;">Hasil Analisis - ${filename}</h1>
-  
-  <div style="white-space: pre-wrap; margin-bottom: 40px; font-size: 14px; text-align: justify;">${highlightedText}</div>
-  
-  ${errors.length > 0 ? `
-  <div style="page-break-before: always;">
-    <h2 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 5px; margin-top: 30px; margin-bottom: 20px; font-size: 18px;">Detail Kesalahan</h2>
-    ${errorDetails}
-  </div>
-  ` : ''}
-</div>`;
-  };
-
-  const generateHighlightedHTML = (text: string) => {
-    if (errors.length === 0) return text.replace(/\n/g, '<br>');
-
-    const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
-    let result = '';
-    let lastIndex = 0;
-
-    sortedErrors.forEach((error) => {
-      if (error.start > lastIndex) {
-        result += text.slice(lastIndex, error.start).replace(/\n/g, '<br>');
-      }
-      result += `<span style="background-color: ${getPDFErrorColor(error.type)}; padding: 1px 3px; border-radius: 2px; border: 1px solid ${getBorderColor(error.type)}; font-weight: 500;">${error.text}</span>`;
-      result += `<em style="font-size: 12px; color: #666; font-style: italic;"> [${getErrorTypeName(error.type)}: ${error.suggestion}]</em>`;
-      lastIndex = error.end;
-    });
-
-    if (lastIndex < text.length) {
-      result += text.slice(lastIndex).replace(/\n/g, '<br>');
-    }
-
-    return result;
-  };
-
-  const getPDFErrorColor = (type: Error['type']) => {
-    switch (type) {
-      case 'grammar': return '#fef2f2';
-      case 'spelling': return '#fef3c7';
-      case 'misspelling': return '#fee2e2';
-      case 'informal': return '#dbeafe';
-      case 'punctuation': return '#fecaca';
-      case 'capitalization': return '#e0e7ff';
-      case 'format': return '#fed7aa';
-      default: return '#f3f4f6';
-    }
-  };
-
-  const generateErrorDetailsHTML = () => {
-    return errors.map((error, index) => `
-      <div style="margin-bottom: 15px; padding: 10px; border-radius: 5px; border-left: 4px solid ${getBorderColor(error.type)}; background-color: ${getPDFErrorColor(error.type)};">
-        <div style="font-weight: bold; margin-bottom: 5px;">${index + 1}. ${getErrorTypeName(error.type)}</div>
-        <div>Ditemukan: <span style="font-family: monospace; background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">"${error.text}"</span></div>
-        <div><strong>Saran:</strong> ${error.suggestion}</div>
-      </div>
-    `).join('');
-  };
-
-  const getBorderColor = (type: Error['type']) => {
-    switch (type) {
-      case 'grammar': return '#991b1b';
-      case 'spelling': return '#92400e';
-      case 'misspelling': return '#dc2626';
-      case 'informal': return '#1d4ed8';
-      case 'punctuation': return '#b91c1c';
-      case 'capitalization': return '#3730a3';
-      case 'format': return '#c2410c';
-      default: return '#6b7280';
-    }
-  };
 
   const highlightErrors = (text: string) => {
     if (errors.length === 0) return text;
@@ -407,10 +378,6 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
               <DropdownMenuItem onClick={downloadDOCX}>
                 <FileText className="w-4 h-4 mr-2" />
                 Download sebagai DOCX
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={downloadPDF}>
-                <FileText className="w-4 h-4 mr-2" />
-                Download sebagai PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
