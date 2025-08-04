@@ -126,41 +126,21 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     }
 
     const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
-    const paragraphs = [];
+    const children = [];
     let lastIndex = 0;
 
     sortedErrors.forEach((error) => {
       // Add text before error
       if (error.start > lastIndex) {
         const beforeText = content.slice(lastIndex, error.start);
-        const lines = beforeText.split('\n');
-        lines.forEach((line, index) => {
-          if (index === lines.length - 1 && line && error.start < content.length) {
-            // Last line before error, add as inline text
-            paragraphs.push(new Paragraph({
-              children: [
-                new TextRun({ text: line }),
-                new TextRun({
-                  text: error.text,
-                  highlight: getDocxErrorColor(error.type)
-                })
-              ]
-            }));
-          } else {
-            paragraphs.push(new Paragraph({ text: line || " " }));
-          }
-        });
-      } else {
-        // Error at start or consecutive errors
-        paragraphs.push(new Paragraph({
-          children: [
-            new TextRun({
-              text: error.text,
-              highlight: getDocxErrorColor(error.type)
-            })
-          ]
-        }));
+        children.push(new TextRun({ text: beforeText }));
       }
+
+      // Add highlighted error text
+      children.push(new TextRun({
+        text: error.text,
+        highlight: getDocxErrorColor(error.type)
+      }));
 
       lastIndex = error.end;
     });
@@ -168,12 +148,47 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     // Add remaining text
     if (lastIndex < content.length) {
       const remainingText = content.slice(lastIndex);
-      remainingText.split('\n').forEach(line => {
-        paragraphs.push(new Paragraph({ text: line || " " }));
-      });
+      children.push(new TextRun({ text: remainingText }));
     }
 
-    return paragraphs;
+    // Split content into paragraphs while preserving highlights
+    const fullText = children.map(child => child.text || '').join('');
+    const lines = fullText.split('\n');
+    
+    return lines.map((line, lineIndex) => {
+      const lineStart = lines.slice(0, lineIndex).reduce((acc, l) => acc + l.length + 1, 0);
+      const lineEnd = lineStart + line.length;
+      
+      const lineChildren = [];
+      let linePos = lineStart;
+      
+      // Find all text runs that overlap with this line
+      children.forEach((child) => {
+        const childText = child.text || '';
+        const childStart = content.indexOf(childText, linePos - childText.length);
+        const childEnd = childStart + childText.length;
+        
+        if (childStart >= lineStart && childStart < lineEnd) {
+          const startInLine = Math.max(0, childStart - lineStart);
+          const endInLine = Math.min(line.length, childEnd - lineStart);
+          const lineText = line.slice(startInLine, endInLine);
+          
+          if (lineText) {
+            lineChildren.push(new TextRun({
+              text: lineText,
+              highlight: child.highlight
+            }));
+          }
+        }
+      });
+      
+      // If no highlighted children found, just use plain text
+      if (lineChildren.length === 0) {
+        return new Paragraph({ text: line || " " });
+      }
+      
+      return new Paragraph({ children: lineChildren });
+    });
   };
 
   const generateDocxErrorDetails = () => {
