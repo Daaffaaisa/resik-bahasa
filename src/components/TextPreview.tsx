@@ -156,87 +156,54 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
       }));
     }
 
-    // Convert to paragraphs by splitting on newlines
-    let currentParagraph = [];
-    let currentText = '';
-    
-    children.forEach((child, index) => {
-      const text = child.text || '';
-      const lines = text.split('\n');
-      
+    // Now split into paragraphs based on newlines in the original content
+    const result = [];
+    let currentParagraphRuns = [];
+    let textPosition = 0;
+
+    children.forEach((run) => {
+      const runText = run.text || '';
+      const lines = runText.split('\n');
+
       lines.forEach((line, lineIndex) => {
         if (lineIndex === 0) {
-          // First line continues current paragraph
+          // Add to current paragraph
           if (line) {
-            currentParagraph.push(new TextRun({
+            currentParagraphRuns.push(new TextRun({
               text: line,
-              highlight: child.highlight
+              highlight: run.highlight
             }));
           }
         } else {
-          // New line, finish current paragraph
-          if (currentParagraph.length === 0) {
-            currentParagraph.push(new TextRun({ text: " " }));
-          }
+          // Finish current paragraph and start new one
+          result.push(new Paragraph({
+            children: currentParagraphRuns.length > 0 ? currentParagraphRuns : [new TextRun({ text: " " })]
+          }));
           
-          const paragraphs = [new Paragraph({ children: currentParagraph })];
-          
-          // Start new paragraph
-          currentParagraph = line ? [new TextRun({
+          // Start new paragraph with remaining text
+          currentParagraphRuns = line ? [new TextRun({
             text: line,
-            highlight: child.highlight
-          })] : [new TextRun({ text: " " })];
+            highlight: run.highlight
+          })] : [];
           
-          // Add intermediate empty paragraphs for multiple newlines
-          for (let i = 1; i < lineIndex; i++) {
-            paragraphs.push(new Paragraph({ text: " " }));
+          // Add empty paragraphs for multiple consecutive newlines
+          if (lineIndex > 1) {
+            for (let i = 1; i < lineIndex; i++) {
+              result.push(new Paragraph({ text: " " }));
+            }
           }
-          
-          return paragraphs;
         }
       });
     });
 
     // Add final paragraph
-    if (currentParagraph.length === 0) {
-      currentParagraph.push(new TextRun({ text: " " }));
+    if (currentParagraphRuns.length > 0) {
+      result.push(new Paragraph({ children: currentParagraphRuns }));
+    } else {
+      result.push(new Paragraph({ text: " " }));
     }
 
-    // Convert all text to single paragraph with proper line breaks
-    const allText = children.map(c => c.text).join('');
-    return allText.split('\n').map(line => {
-      if (!line.trim()) {
-        return new Paragraph({ text: " " });
-      }
-
-      const lineChildren = [];
-      let remainingLine = line;
-      
-      children.forEach(child => {
-        const childText = child.text || '';
-        if (remainingLine.includes(childText) && childText.trim()) {
-          const beforeText = remainingLine.substring(0, remainingLine.indexOf(childText));
-          if (beforeText) {
-            lineChildren.push(new TextRun({ text: beforeText }));
-          }
-          
-          lineChildren.push(new TextRun({
-            text: childText,
-            highlight: child.highlight
-          }));
-          
-          remainingLine = remainingLine.substring(remainingLine.indexOf(childText) + childText.length);
-        }
-      });
-      
-      if (remainingLine) {
-        lineChildren.push(new TextRun({ text: remainingLine }));
-      }
-
-      return lineChildren.length > 0 
-        ? new Paragraph({ children: lineChildren })
-        : new Paragraph({ text: line });
-    });
+    return result;
   };
 
   const generateDocxErrorDetails = () => {
