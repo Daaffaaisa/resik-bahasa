@@ -126,52 +126,69 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     }
 
     const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
-    const paragraphs = [];
+    const textRuns = [];
     let lastIndex = 0;
 
+    // Process each error and create text runs
     sortedErrors.forEach((error) => {
       // Add text before error
       if (error.start > lastIndex) {
-        const beforeText = content.slice(lastIndex, error.start);
-        const lines = beforeText.split('\n');
-        lines.forEach((line, index) => {
-          if (index === lines.length - 1 && line && error.start < content.length) {
-            // Last line before error, add as inline text
-            paragraphs.push(new Paragraph({
-              children: [
-                new TextRun({ text: line }),
-                new TextRun({
-                  text: error.text,
-                  highlight: getDocxErrorColor(error.type)
-                })
-              ]
-            }));
-          } else {
-            paragraphs.push(new Paragraph({ text: line || " " }));
-          }
-        });
-      } else {
-        // Error at start or consecutive errors
-        paragraphs.push(new Paragraph({
-          children: [
-            new TextRun({
-              text: error.text,
-              highlight: getDocxErrorColor(error.type)
-            })
-          ]
+        textRuns.push(new TextRun({ 
+          text: content.slice(lastIndex, error.start) 
         }));
       }
+
+      // Add highlighted error text
+      textRuns.push(new TextRun({
+        text: error.text,
+        highlight: getDocxErrorColor(error.type)
+      }));
 
       lastIndex = error.end;
     });
 
     // Add remaining text
     if (lastIndex < content.length) {
-      const remainingText = content.slice(lastIndex);
-      remainingText.split('\n').forEach(line => {
-        paragraphs.push(new Paragraph({ text: line || " " }));
-      });
+      textRuns.push(new TextRun({ 
+        text: content.slice(lastIndex) 
+      }));
     }
+
+    // Split text runs by line breaks and create paragraphs
+    const paragraphs = [];
+    let currentLineRuns = [];
+
+    textRuns.forEach((run) => {
+      const runText = run.text || '';
+      const lines = runText.split('\n');
+
+      lines.forEach((line, index) => {
+        if (index === 0) {
+          // First line continues current paragraph
+          if (line) {
+            currentLineRuns.push(new TextRun({
+              text: line,
+              highlight: run.highlight
+            }));
+          }
+        } else {
+          // New line starts new paragraph
+          paragraphs.push(new Paragraph({
+            children: currentLineRuns.length > 0 ? currentLineRuns : [new TextRun({ text: " " })]
+          }));
+          
+          currentLineRuns = line ? [new TextRun({
+            text: line,
+            highlight: run.highlight
+          })] : [];
+        }
+      });
+    });
+
+    // Add final paragraph
+    paragraphs.push(new Paragraph({
+      children: currentLineRuns.length > 0 ? currentLineRuns : [new TextRun({ text: " " })]
+    }));
 
     return paragraphs;
   };
