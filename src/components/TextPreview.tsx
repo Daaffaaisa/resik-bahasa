@@ -91,10 +91,12 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
           // Content with highlighted errors
           ...generateDocxContent(),
           
-          // Error details if any
+          // Page break and error details if any
           ...(errors.length > 0 ? [
-            new Paragraph({ text: "" }),
-            new Paragraph({ text: "" }),
+            new Paragraph({
+              text: "",
+              pageBreakBefore: true
+            }),
             new Paragraph({
               text: "DETAIL KESALAHAN",
               heading: HeadingLevel.HEADING_2,
@@ -129,11 +131,13 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
     const children = [];
     let lastIndex = 0;
 
+    // Build text runs with highlights
     sortedErrors.forEach((error) => {
       // Add text before error
       if (error.start > lastIndex) {
-        const beforeText = content.slice(lastIndex, error.start);
-        children.push(new TextRun({ text: beforeText }));
+        children.push(new TextRun({
+          text: content.slice(lastIndex, error.start)
+        }));
       }
 
       // Add highlighted error text
@@ -147,47 +151,91 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
 
     // Add remaining text
     if (lastIndex < content.length) {
-      const remainingText = content.slice(lastIndex);
-      children.push(new TextRun({ text: remainingText }));
+      children.push(new TextRun({
+        text: content.slice(lastIndex)
+      }));
     }
 
-    // Split content into paragraphs while preserving highlights
-    const fullText = children.map(child => child.text || '').join('');
-    const lines = fullText.split('\n');
+    // Convert to paragraphs by splitting on newlines
+    let currentParagraph = [];
+    let currentText = '';
     
-    return lines.map((line, lineIndex) => {
-      const lineStart = lines.slice(0, lineIndex).reduce((acc, l) => acc + l.length + 1, 0);
-      const lineEnd = lineStart + line.length;
+    children.forEach((child, index) => {
+      const text = child.text || '';
+      const lines = text.split('\n');
       
-      const lineChildren = [];
-      let linePos = lineStart;
-      
-      // Find all text runs that overlap with this line
-      children.forEach((child) => {
-        const childText = child.text || '';
-        const childStart = content.indexOf(childText, linePos - childText.length);
-        const childEnd = childStart + childText.length;
-        
-        if (childStart >= lineStart && childStart < lineEnd) {
-          const startInLine = Math.max(0, childStart - lineStart);
-          const endInLine = Math.min(line.length, childEnd - lineStart);
-          const lineText = line.slice(startInLine, endInLine);
-          
-          if (lineText) {
-            lineChildren.push(new TextRun({
-              text: lineText,
+      lines.forEach((line, lineIndex) => {
+        if (lineIndex === 0) {
+          // First line continues current paragraph
+          if (line) {
+            currentParagraph.push(new TextRun({
+              text: line,
               highlight: child.highlight
             }));
           }
+        } else {
+          // New line, finish current paragraph
+          if (currentParagraph.length === 0) {
+            currentParagraph.push(new TextRun({ text: " " }));
+          }
+          
+          const paragraphs = [new Paragraph({ children: currentParagraph })];
+          
+          // Start new paragraph
+          currentParagraph = line ? [new TextRun({
+            text: line,
+            highlight: child.highlight
+          })] : [new TextRun({ text: " " })];
+          
+          // Add intermediate empty paragraphs for multiple newlines
+          for (let i = 1; i < lineIndex; i++) {
+            paragraphs.push(new Paragraph({ text: " " }));
+          }
+          
+          return paragraphs;
+        }
+      });
+    });
+
+    // Add final paragraph
+    if (currentParagraph.length === 0) {
+      currentParagraph.push(new TextRun({ text: " " }));
+    }
+
+    // Convert all text to single paragraph with proper line breaks
+    const allText = children.map(c => c.text).join('');
+    return allText.split('\n').map(line => {
+      if (!line.trim()) {
+        return new Paragraph({ text: " " });
+      }
+
+      const lineChildren = [];
+      let remainingLine = line;
+      
+      children.forEach(child => {
+        const childText = child.text || '';
+        if (remainingLine.includes(childText) && childText.trim()) {
+          const beforeText = remainingLine.substring(0, remainingLine.indexOf(childText));
+          if (beforeText) {
+            lineChildren.push(new TextRun({ text: beforeText }));
+          }
+          
+          lineChildren.push(new TextRun({
+            text: childText,
+            highlight: child.highlight
+          }));
+          
+          remainingLine = remainingLine.substring(remainingLine.indexOf(childText) + childText.length);
         }
       });
       
-      // If no highlighted children found, just use plain text
-      if (lineChildren.length === 0) {
-        return new Paragraph({ text: line || " " });
+      if (remainingLine) {
+        lineChildren.push(new TextRun({ text: remainingLine }));
       }
-      
-      return new Paragraph({ children: lineChildren });
+
+      return lineChildren.length > 0 
+        ? new Paragraph({ children: lineChildren })
+        : new Paragraph({ text: line });
     });
   };
 
