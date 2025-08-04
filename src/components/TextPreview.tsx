@@ -143,11 +143,6 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
                 new TextRun({
                   text: error.text,
                   highlight: getDocxErrorColor(error.type)
-                }),
-                new TextRun({
-                  text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
-                  italics: true,
-                  size: 18
                 })
               ]
             }));
@@ -162,11 +157,6 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
             new TextRun({
               text: error.text,
               highlight: getDocxErrorColor(error.type)
-            }),
-            new TextRun({
-              text: ` [${getErrorTypeName(error.type)}: ${error.suggestion}]`,
-              italics: true,
-              size: 18
             })
           ]
         }));
