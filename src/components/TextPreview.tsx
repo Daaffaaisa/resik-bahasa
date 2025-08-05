@@ -121,88 +121,71 @@ export const TextPreview = ({ content, filename, errors }: TextPreviewProps) => 
   };
 
   const generateDocxContent = () => {
+    // Split content into lines first
+    const lines = content.split('\n');
+    
     if (errors.length === 0) {
-      return content.split('\n').map(line => 
+      return lines.map(line => 
         new Paragraph({ text: line || " " })
       );
     }
 
-    const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
-    const children = [];
-    let lastIndex = 0;
-
-    // Build text runs with highlights
-    sortedErrors.forEach((error) => {
-      // Add text before error
-      if (error.start > lastIndex) {
-        children.push(new TextRun({
-          text: content.slice(lastIndex, error.start)
-        }));
-      }
-
-      // Add highlighted error text
-      children.push(new TextRun({
-        text: error.text,
-        highlight: getDocxErrorColor(error.type)
-      }));
-
-      lastIndex = error.end;
-    });
-
-    // Add remaining text
-    if (lastIndex < content.length) {
-      children.push(new TextRun({
-        text: content.slice(lastIndex)
-      }));
-    }
-
-    // Now split into paragraphs based on newlines in the original content
+    // Process each line and add highlights for errors
     const result = [];
-    let currentParagraphRuns = [];
-    let textPosition = 0;
-
-    children.forEach((run) => {
-      const runText = run.text || '';
-      const lines = runText.split('\n');
-
-      lines.forEach((line, lineIndex) => {
-        if (lineIndex === 0) {
-          // Add to current paragraph
-          if (line) {
-            currentParagraphRuns.push(new TextRun({
-              text: line,
-              highlight: run.highlight
+    const sortedErrors = [...errors].sort((a, b) => a.start - b.start);
+    
+    lines.forEach(line => {
+      if (!line.trim()) {
+        result.push(new Paragraph({ text: " " }));
+        return;
+      }
+      
+      // Find all errors that occur in this line
+      const lineStart = content.indexOf(line);
+      const lineEnd = lineStart + line.length;
+      const lineErrors = sortedErrors.filter(error => 
+        error.start >= lineStart && error.end <= lineEnd
+      );
+      
+      if (lineErrors.length === 0) {
+        // No errors in this line, add as plain text
+        result.push(new Paragraph({ text: line }));
+      } else {
+        // Line has errors, create runs with highlights
+        const runs = [];
+        let lastPos = 0;
+        
+        lineErrors.forEach(error => {
+          const errorStartInLine = error.start - lineStart;
+          const errorEndInLine = error.end - lineStart;
+          
+          // Add text before error
+          if (errorStartInLine > lastPos) {
+            runs.push(new TextRun({
+              text: line.slice(lastPos, errorStartInLine)
             }));
           }
-        } else {
-          // Finish current paragraph and start new one
-          result.push(new Paragraph({
-            children: currentParagraphRuns.length > 0 ? currentParagraphRuns : [new TextRun({ text: " " })]
+          
+          // Add highlighted error text
+          runs.push(new TextRun({
+            text: line.slice(errorStartInLine, errorEndInLine),
+            highlight: getDocxErrorColor(error.type)
           }));
           
-          // Start new paragraph with remaining text
-          currentParagraphRuns = line ? [new TextRun({
-            text: line,
-            highlight: run.highlight
-          })] : [];
-          
-          // Add empty paragraphs for multiple consecutive newlines
-          if (lineIndex > 1) {
-            for (let i = 1; i < lineIndex; i++) {
-              result.push(new Paragraph({ text: " " }));
-            }
-          }
+          lastPos = errorEndInLine;
+        });
+        
+        // Add remaining text after last error
+        if (lastPos < line.length) {
+          runs.push(new TextRun({
+            text: line.slice(lastPos)
+          }));
         }
-      });
+        
+        result.push(new Paragraph({ children: runs }));
+      }
     });
-
-    // Add final paragraph
-    if (currentParagraphRuns.length > 0) {
-      result.push(new Paragraph({ children: currentParagraphRuns }));
-    } else {
-      result.push(new Paragraph({ text: " " }));
-    }
-
+    
     return result;
   };
 
